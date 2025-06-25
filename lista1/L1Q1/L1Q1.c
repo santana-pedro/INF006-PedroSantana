@@ -5,6 +5,7 @@
 #include <limits.h>
 
 #define INITIAL_CAPACITY 10
+#define MAX_LINE_LENGTH 3001
 
 typedef struct{
     int* numbers;
@@ -20,23 +21,37 @@ typedef struct{
 
 IntList* create_list(){
     IntList* list = (IntList*)malloc(sizeof(IntList));
+    if(!list){
+        perror("Erro ao alocar IntList");
+        exit(EXIT_FAILURE);
+    }
     list->capacity = INITIAL_CAPACITY;
     list->numbers = (int*)malloc(list->capacity * sizeof(int));
+    if(!list->numbers){
+        perror("Erro ao alocar numbers para IntList");
+        free(list);
+        exit(EXIT_FAILURE);
+    }
     list->count = 0;
     list->sum = 0;
     return list;
 }
 
 void add_to_list(IntList* list, int number){
-    if (list->count == list->capacity) {
+    if(list->count == list->capacity){
         list->capacity *= 2;
         list->numbers = (int*)realloc(list->numbers, list->capacity * sizeof(int));
+        if(!list->numbers){
+            perror("Erro ao realocar numbers para IntList");
+            exit(EXIT_FAILURE);
+        }
     }
     list->numbers[list->count++] = number;
+    list->sum += number;
 }
 
 void free_list(IntList* list){
-    if (list) {
+    if(list){
         free(list->numbers);
         free(list);
     }
@@ -63,80 +78,125 @@ int main(){
         return EXIT_FAILURE;
     }
 
-    IntList** all_lists = (IntList**)malloc(INITIAL_CAPACITY * sizeof(IntList*));
-    int list_count = 0;
-    int list_capacity = INITIAL_CAPACITY;
+    char line_buffer[MAX_LINE_LENGTH];
 
-    char buffer[3001];
-    IntList* current_list = NULL;
+    while(fgets(line_buffer, sizeof(line_buffer), fp_in) != NULL){
+        line_buffer[strcspn(line_buffer, "\n")] = 0;
 
-    while(fscanf(fp_in, "%s", buffer) != EOF){
-        if(strcmp(buffer, "start") == 0){
-            current_list = create_list();
-            if(list_count == list_capacity){
-                list_capacity *= 2;
-                all_lists = (IntList**)realloc(all_lists, list_capacity * sizeof(IntList*));
+        char *trim_start = line_buffer;
+        while(*trim_start == ' ') trim_start++;
+        char *trim_end = trim_start + strlen(trim_start) - 1;
+        while(trim_end >= trim_start && *trim_end == ' ') trim_end--;
+        *(trim_end + 1) = '\0';
+
+        IntList** current_line_lists = (IntList**)malloc(INITIAL_CAPACITY * sizeof(IntList*));
+        if(!current_line_lists){
+            perror("Erro ao alocar current_line_lists");
+            exit(EXIT_FAILURE);
+        }
+        int current_line_list_count = 0;
+        int current_line_list_capacity = INITIAL_CAPACITY;
+
+        SumMapEntry* temp_sum_map = (SumMapEntry*)malloc(INITIAL_CAPACITY * sizeof(SumMapEntry));
+        if(!temp_sum_map){
+            perror("Erro ao alocar temp_sum_map");
+            free(current_line_lists);
+            exit(EXIT_FAILURE);
+        }
+        int temp_map_count = 0;
+        int temp_map_capacity = INITIAL_CAPACITY;
+
+        char *token;
+        char *line_copy = strdup(trim_start);
+        if(!line_copy){
+            perror("Erro ao duplicar linha");
+            free(current_line_lists);
+            free(temp_sum_map);
+            exit(EXIT_FAILURE);
+        }
+
+        token = strtok(line_copy, " ");
+        while(token != NULL){
+            if(strcmp(token, "start") == 0){
+                if(current_line_list_count == current_line_list_capacity){
+                    current_line_list_capacity *= 2;
+                    current_line_lists = (IntList**)realloc(current_line_lists, current_line_list_capacity * sizeof(IntList*));
+                    if(!current_line_lists){
+                        perror("Erro ao realocar current_line_lists");
+                        free(line_copy);
+                        exit(EXIT_FAILURE);
+                    }
+                }
+                current_line_lists[current_line_list_count] = create_list();
+                current_line_list_count++;
+            }else{
+                if(current_line_list_count > 0){
+                    add_to_list(current_line_lists[current_line_list_count - 1], atoi(token));
+                }
             }
-            all_lists[list_count++] = current_list;
-        }else{
-            if(current_list != NULL){
-                add_to_list(current_list, atoi(buffer));
+            token = strtok(NULL, " ");
+        }
+        free(line_copy);
+
+        for(int i = 0; i < current_line_list_count; i++){
+            qsort(current_line_lists[i]->numbers, current_line_lists[i]->count, sizeof(int), compare_integers);
+
+            int found_idx = -1;
+            for(int j = 0; j < temp_map_count; j++){
+                if(temp_sum_map[j].sum == current_line_lists[i]->sum) {
+                    found_idx = j;
+                    break;
+                }
+            }
+
+            if(found_idx != -1){
+                free_list(temp_sum_map[found_idx].list);
+                temp_sum_map[found_idx].list = current_line_lists[i];
+            } else{
+                if(temp_map_count == temp_map_capacity){
+                    temp_map_capacity *= 2;
+                    temp_sum_map = (SumMapEntry*)realloc(temp_sum_map, temp_map_capacity * sizeof(SumMapEntry));
+                    if (!temp_sum_map) {
+                        perror("Erro ao realocar temp_sum_map");
+                        exit(EXIT_FAILURE);
+                    }
+                }
+                temp_sum_map[temp_map_count].sum = current_line_lists[i]->sum;
+                temp_sum_map[temp_map_count].list = current_line_lists[i];
+                temp_map_count++;
             }
         }
-    }
-
-    // Processamento das listas
-    for(int i = 0; i < list_count; i++){
-        long long current_sum = 0;
-        for(int j = 0; j < all_lists[i]->count; j++){
-            current_sum += all_lists[i]->numbers[j];
+        
+        IntList** final_lists_for_line = (IntList**)malloc(temp_map_count * sizeof(IntList*));
+        if(!final_lists_for_line){
+            perror("Erro ao alocar final_lists_for_line");
+            exit(EXIT_FAILURE);
         }
-        all_lists[i]->sum = current_sum;
-        qsort(all_lists[i]->numbers, all_lists[i]->count, sizeof(int), compare_integers);
-    }
+        for(int i = 0; i < temp_map_count; i++){
+            final_lists_for_line[i] = temp_sum_map[i].list;
+        }
 
-    SumMapEntry* sum_map = (SumMapEntry*)malloc(list_count * sizeof(SumMapEntry));
-    int map_count = 0;
+        qsort(final_lists_for_line, temp_map_count, sizeof(IntList*), compare_lists_by_sum);
 
-    for(int i = 0; i < list_count; i++){
-        int found_idx = -1;
-        for(int j = 0; j < map_count; j++){
-            if (sum_map[j].sum == all_lists[i]->sum) {
-                found_idx = j;
-                break;
+        for(int i = 0; i < temp_map_count; i++){
+            fprintf(fp_out, "start");
+            for(int j = 0; j < final_lists_for_line[i]->count; j++){
+                fprintf(fp_out, " %d", final_lists_for_line[i]->numbers[j]);
             }
-        }
-        if(found_idx != -1){
-            sum_map[found_idx].list = all_lists[i]; // mantém a última ocorrência
-        }else{
-            sum_map[map_count].sum = all_lists[i]->sum;
-            sum_map[map_count].list = all_lists[i];
-            map_count++;
-        }
-    }
-
-    IntList** final_lists = (IntList**)malloc(map_count * sizeof(IntList*));
-    for(int i = 0; i < map_count; i++){
-        final_lists[i] = sum_map[i].list;
-    }
-
-    qsort(final_lists, map_count, sizeof(IntList*), compare_lists_by_sum);
-
-    for(int i = 0; i < map_count; i++){
-        fprintf(fp_out, "start");
-        for(int j = 0; j < final_lists[i]->count; j++){
-            fprintf(fp_out, " %d", final_lists[i]->numbers[j]);
+            if(i < temp_map_count - 1){
+                fprintf(fp_out, " ");
+            }
         }
         fprintf(fp_out, "\n");
-    }
 
-    for(int i = 0; i < list_count; i++){
-        free_list(all_lists[i]);
-    }
+        for(int i = 0; i < temp_map_count; i++){
+            free_list(temp_sum_map[i].list);
+        }
 
-    free(all_lists);
-    free(sum_map);
-    free(final_lists);
+        free(current_line_lists);
+        free(temp_sum_map);
+        free(final_lists_for_line);
+    }
 
     fclose(fp_in);
     fclose(fp_out);
