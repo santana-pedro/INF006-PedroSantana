@@ -146,16 +146,11 @@ int main(){
             }
         }
 
-        int has_empty_sublist = 0;
         for(DLNode* current = head; current != NULL; current = current->next){
-            if(current->sublist_count == 0){
-                has_empty_sublist = 1;
-            }else{
-                sort_sublist(current);
-            }
+            sort_sublist(current);
         }
 
-        if(has_empty_sublist) fprintf(fp_out, "[");
+        fprintf(fp_out, "[");
 
         for(DLNode* current = head; current != NULL; current = current->next){
             fprintf(fp_out, "%d(", current->key);
@@ -175,8 +170,7 @@ int main(){
             }
         }
 
-        if(has_empty_sublist) fprintf(fp_out, "]");
-        fprintf(fp_out, "\n");
+        fprintf(fp_out, "]\n");
 
         free_structure(head);
     }
