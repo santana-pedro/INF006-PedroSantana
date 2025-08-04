@@ -1,3 +1,5 @@
+//ALUNOS: PEDRO SANTANA E VICTOR GABRIEL
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

@@ -1,6 +1,7 @@
 {
     "files.associations": {
         "L1Q3.C": "cpp",
-        "stdio.h": "c"
+        "stdio.h": "c",
+        "limits.h": "c"
     }
 }
